@@ -530,7 +530,7 @@ function buildCharts(){
     return [{label:k,data:dotted,borderColor:c,backgroundColor:c+'18',tension:0.35,pointRadius:4,borderWidth:2,fill:false,borderDash:[5,4],spanGaps:false}];
   });
 
-  let sDs = cySales==='2024'?mk24(salesColors,salesKeys,sd):cySales==='2026'?make26ds(salesColors,salesKeys,sd):mkSolid(salesColors,salesKeys,sd);
+  let sDs = cySales==='2026'?make26ds(salesColors,salesKeys,sd):(cySales==='2024'&&isUnlocked)?mk24(salesColors,salesKeys,sd):mkSolid(salesColors,salesKeys,sd);
   if(chartS) chartS.destroy();
   chartS=new Chart(document.getElementById('chartSales'),{type:'line',data:{labels:sd.labels,datasets:sDs},options:chartOpts()});
 
@@ -538,7 +538,7 @@ function buildCharts(){
   const pd=RAW[cyProfit];
   document.getElementById('legend-profit').innerHTML=profitColors.map(([k,c])=>
     `<div class="legend-item"><span class="legend-dot" style="background:${c}"></span>${k}</div>`).join('');
-  let pDs=cyProfit==='2024'?mk24(profitColors,profitKeys,pd):cyProfit==='2026'?make26ds(profitColors,profitKeys,pd):mkSolid(profitColors,profitKeys,pd);
+  let pDs=cyProfit==='2026'?make26ds(profitColors,profitKeys,pd):(cyProfit==='2024'&&isUnlocked)?mk24(profitColors,profitKeys,pd):mkSolid(profitColors,profitKeys,pd);
   if(chartP) chartP.destroy();
   chartP=new Chart(document.getElementById('chartProfit'),{type:'line',data:{labels:pd.labels,datasets:pDs},options:chartOpts(true)});
 }
