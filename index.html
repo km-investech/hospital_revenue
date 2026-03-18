@@ -269,15 +269,15 @@ const N = null;
 const SAMPLE_DATA = {
   '2024': {
     labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
-    보험청구액:  [N,N,N,N,N,N,N,N,N, 18500000,17800000,21200000],
-    수납액:      [N,N,N,N,N,N,N,N,N, 76000000,83400000,77000000],
-    검진:        [N,N,N,N,N,N,N,N,N, 11500000,13200000,15800000],
-    급여:        [N,N,N,N,N,N,N,N,N, 50400000,50400000,49600000],
-    급여병원부담:[N,N,N,N,N,N,N,N,N, 4490000, 4490000, 4490000],
-    퇴직금:      [N,N,N,N,N,N,N,N,N, 2740000, 2740000, 2740000],
-    매출총이익:  [N,N,N,N,N,N,N,N,N, 16200000,19700000,21200000],
-    NET:         [N,N,N,N,N,N,N,N,N, 5760000, 8480000, 7390000],
-    dataStart: 9,
+    보험청구액:  [17600000,12230000,11880000,15870000,16910000,17170000,15180000,16740000,16040000, 18500000,17800000,21200000],
+    수납액:      [37800000,42550000,53290000,80550000,76080000,59840000,72100000,65540000,70290000, 76000000,83400000,77000000],
+    검진:        [16810000, 9120000, 6770000, 9020000,11070000,10050000,11690000,13840000,12820000, 11500000,13200000,15800000],
+    급여:        [32420000,33860000,40500000,41270000,46460000,46460000,46460000,46460000,48580000, 50400000,50400000,49600000],
+    급여병원부담:[ 3580000, 3730000, 3820000, 3820000, 4260000, 4260000, 4260000, 4260000, 4480000,  4490000, 4490000, 4490000],
+    퇴직금:      [ 2340000, 2340000, 2600000, 2600000, 2790000, 2790000, 2790000, 2790000, 2710000,  2740000, 2740000, 2740000],
+    매출총이익:  [14010000, 7900000, 4930000,24970000,18510000, 8980000,13920000,12850000,12130000, 16200000,19700000,21200000],
+    NET:         [0,0,0, 4400000, 4070000,  530000, 2980000, 2340000, 3000000,  5760000, 8480000, 7390000],
+    dataStart: 0,
   },
   '2025': {
     labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
@@ -558,13 +558,15 @@ function swCy(t,yr,el){
 function buildMonthGrid(){
   const d=RAW[curYear];
   document.getElementById('month-grid').innerHTML=d.labels.map((m,i)=>{
-    const noData=curYear==='2024'&&i<9;
+    // 실제 2024 데이터는 10~12월만 있으나 샘플에서는 전체 채움
+    const noData = curYear==='2024' && !isUnlocked && false; // 샘플: 전체 표시
+    const realNoData = curYear==='2024' && isUnlocked && i<9;
     const isFore=curYear==='2026'&&i>=FORECAST_FROM;
     let cls='m-btn';
     if(i===selMonth)cls+=' active';
-    if(noData)cls+=' no-data';
+    if(realNoData)cls+=' no-data';
     else if(isFore)cls+=' forecast';
-    return `<button class="${cls}" onclick="${noData?'':'selMon('+i+',this)'}">${m}</button>`;
+    return `<button class="${cls}" onclick="${realNoData?'':'selMon('+i+',this)'}">${m}</button>`;
   }).join('');
 }
 
@@ -580,7 +582,7 @@ function selMon(i,el){
 // ─────────────────────────────────────────────────────────────────────────────
 function renderPanel(){
   const yr=curYear, i=selMonth, d=RAW[yr];
-  const noData=yr==='2024'&&i<9;
+  const noData = curYear==='2024' && isUnlocked && i<9;
   const mode=getMode(yr,i);
 
   if(noData){
@@ -870,7 +872,8 @@ function updVal2425(el){
 // 연도 전환
 // ─────────────────────────────────────────────────────────────────────────────
 function switchYear(yr,el){
-  curYear=yr; selMonth=yr==='2024'?9:0;
+  curYear=yr;
+  selMonth = (yr==='2024' && isUnlocked) ? 9 : 0;
   document.querySelectorAll('.yr-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('hdr-year').textContent=yr;
