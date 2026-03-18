@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>병원 매출분석</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:rgba(0,0,0,0.08);
+  --text:#1a1917;--text2:#6b6a66;--text3:#a09f9a;
+  --up:#1d7a5a;--down:#c0392b;
+  --radius:10px;--radius-lg:16px;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 26px;display:flex;align-items:center;justify-content:space-between}
+.title{font-size:16px;font-weight:700;letter-spacing:-0.02em}
+.sub{font-size:11px;color:var(--text2);margin-top:2px}
+.year-sel{display:flex;gap:4px}
+.yr-btn{padding:6px 14px;font-size:13px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text2);cursor:pointer;transition:all 0.14s}
+.yr-btn:hover{background:var(--surface2)}
+.yr-btn.active{background:var(--text);color:#fff;border-color:var(--text);font-weight:500}
+
+.main{display:grid;grid-template-columns:1fr 360px;min-height:calc(100vh - 55px)}
+.left{padding:18px 22px;overflow-y:auto}
+.right{background:var(--surface);border-left:1px solid var(--border);padding:18px;overflow-y:auto}
+
+/* 2x2 metric cards */
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.metric-label{font-size:11px;color:var(--text2);margin-bottom:5px;font-weight:500;letter-spacing:0.02em}
+.metric-val{display:flex;align-items:baseline;gap:0;line-height:1}
+.metric-num{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--text)}
+.metric-unit{font-size:10px;color:var(--text3);margin-left:1px;font-family:'Noto Sans KR',sans-serif}
+
+/* mobile tab bar — hidden on PC */
+.mobile-tabs{display:none}
+
+@media (max-width: 900px) {
+  .mobile-tabs{
+    display:flex;background:var(--surface);border-bottom:1px solid var(--border);
+  }
+  .mob-tab{
+    flex:1;padding:12px 8px;font-size:13px;font-family:'Noto Sans KR',sans-serif;
+    font-weight:500;border:none;background:none;color:var(--text2);cursor:pointer;
+    border-bottom:2px solid transparent;transition:all 0.14s;
+  }
+  .mob-tab.active{color:var(--text);border-bottom-color:var(--text)}
+  /* hide left/right independently via data-tab */
+  .main{grid-template-columns:1fr;grid-template-rows:auto}
+  .left{border-bottom:none}
+  .right{border-left:none;border-top:1px solid var(--border)}
+  [data-tab-panel="right"]{display:none}
+  [data-tab-panel="left"]{display:block}
+  .main.tab-right [data-tab-panel="right"]{display:block}
+  .main.tab-right [data-tab-panel="left"]{display:none}
+}
+
+@media (max-width: 640px) {
+  header{padding:12px 16px}
+  .title{font-size:14px}
+  .yr-btn{padding:5px 10px;font-size:12px}
+  .left{padding:14px}
+  .right{padding:14px}
+  .metrics-grid{gap:8px;margin-bottom:14px}
+  .metric{padding:11px 12px}
+  .metric-num{font-size:18px}
+  .chart-wrap{height:160px}
+  .month-grid{grid-template-columns:repeat(4,1fr)}
+}
+
+/* charts */
+.chart-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px}
+.chart-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px}
+.chart-title{font-size:13px;font-weight:700}
+.chart-ctrl{display:flex;align-items:center;gap:8px}
+.chart-legend-row{margin-bottom:10px}
+.legend{display:flex;gap:12px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)}
+.legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.chart-wrap{position:relative;width:100%;height:190px}
+.cy-tabs{display:flex;gap:3px}
+.cy-btn{padding:3px 8px;font-size:11px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:10px;background:var(--surface2);color:var(--text2);cursor:pointer;transition:all 0.12s}
+.cy-btn.active{background:var(--text);color:#fff;border-color:var(--text)}
+
+/* right panel */
+.panel-lbl{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:10px}
+.month-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:12px}
+.m-btn{padding:6px 2px;font-size:12px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text2);cursor:pointer;text-align:center;transition:all 0.12s}
+.m-btn:hover{background:var(--surface2)}
+.m-btn.active{background:var(--text);color:#fff;border-color:var(--text);font-weight:500}
+.m-btn.no-data{opacity:0.3;cursor:default}
+.m-btn.forecast{color:var(--text3);border-style:dashed}
+.m-btn.forecast.active{background:var(--text);color:#fff;border-style:solid}
+
+.divider{height:1px;background:var(--border);margin:12px 0}
+
+/* summary + action buttons */
+.summary-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.summary-title{font-size:12px;font-weight:700;color:var(--text)}
+.summary-badges{display:flex;gap:4px}
+.sbadge{font-size:10px;padding:2px 8px;border-radius:4px;font-family:'Noto Sans KR',sans-serif;font-weight:500}
+.sbadge.actual{background:#eaf3de;color:#3b6d11}
+.sbadge.forecast{background:#faeeda;color:#854f0b}
+
+.action-row{display:flex;gap:5px;margin-bottom:12px}
+.act-btn{flex:1;padding:7px 6px;font-size:12px;font-family:'Noto Sans KR',sans-serif;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text2);cursor:pointer;text-align:center;transition:all 0.12s}
+.act-btn:hover{background:var(--surface2);color:var(--text)}
+.act-btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
+.act-btn.primary:hover{opacity:0.85}
+.act-btn.warn{background:#faeeda;color:#854f0b;border-color:#f5c87a}
+.act-btn.warn:hover{background:#f5ddb5}
+
+/* result rows */
+.res-block{background:var(--surface2);border-radius:var(--radius);padding:10px;margin-bottom:10px}
+.res-block-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:8px}
+.res-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)}
+.res-row:last-child{border-bottom:none}
+.res-label{font-size:12px;color:var(--text2)}
+.res-label.indent{padding-left:10px;font-size:11px;color:var(--text3)}
+.res-val{font-size:12px;font-weight:500;font-family:'DM Mono',monospace}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:3px;background:#e8f0f8;color:#2d5a8e;font-family:'Noto Sans KR',sans-serif}
+.badge.g{background:#e0f2ea;color:var(--up)}
+
+/* yoy */
+.yoy-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:10px}
+.yoy-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.05em;text-transform:uppercase;margin-bottom:8px}
+.yoy-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border)}
+.yoy-row:last-child{border-bottom:none}
+.yoy-lbl{font-size:12px;color:var(--text2)}
+.yoy-vals{display:flex;align-items:center;gap:5px;font-size:11px}
+.yoy-prev{color:var(--text3);font-family:'DM Mono',monospace}
+.yoy-cur{font-family:'DM Mono',monospace;color:var(--text);font-weight:500}
+.yoy-tag{font-size:10px;padding:1px 5px;border-radius:3px;font-family:'Noto Sans KR',sans-serif;font-weight:500}
+.yoy-tag.up{background:#e0f2ea;color:var(--up)}.yoy-tag.down{background:#fde8e8;color:var(--down)}.yoy-tag.na{background:var(--surface2);color:var(--text3)}
+
+/* edit form */
+.edit-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.fg-title{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:7px;margin-top:10px}
+.fg-title:first-child{margin-top:0}
+.field-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.field-lbl{font-size:12px;color:var(--text2)}
+.field-in{width:130px;padding:5px 8px;font-size:12px;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);text-align:right;transition:border-color 0.12s}
+.field-in:focus{outline:none;border-color:#2d5a8e}
+.field-in.auto{background:var(--surface2);color:var(--text2);font-style:italic}
+</style>
+</head>
+<body>
+<!-- 비밀번호 잠금 오버레이 -->
+<div id="lock-overlay" style="position:fixed;inset:0;z-index:9999;background:#f5f4f0;display:flex;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid rgba(0,0,0,0.08);border-radius:16px;padding:36px 40px;width:340px;text-align:center">
+    <div style="font-size:28px;margin-bottom:12px">🔒</div>
+    <div style="font-size:15px;font-weight:700;color:#1a1917;margin-bottom:4px">병원 매출분석 대시보드</div>
+    <div style="font-size:12px;color:#a09f9a;margin-bottom:8px">나은치과</div>
+    <div style="font-size:11px;color:#7a6a1a;background:#faeeda;border-radius:6px;padding:6px 10px;margin-bottom:20px">
+      📊 아래는 샘플 데이터입니다. 비밀번호를 입력하면 실제 데이터로 전환됩니다.
+    </div>
+    <input id="pw-input" type="password" placeholder="비밀번호 입력"
+      style="width:100%;padding:10px 14px;font-size:14px;border:1px solid rgba(0,0,0,0.12);border-radius:8px;margin-bottom:8px;font-family:'Noto Sans KR',sans-serif;outline:none;text-align:center"
+      onfocus="this.style.borderColor='#2d5a8e'" onblur="this.style.borderColor='rgba(0,0,0,0.12)'"/>
+    <div id="pw-error" style="display:none;font-size:11px;color:#c0392b;margin-bottom:8px">비밀번호가 올바르지 않습니다</div>
+    <button onclick="tryUnlock()"
+      style="width:100%;padding:10px;font-size:13px;font-weight:500;font-family:'Noto Sans KR',sans-serif;background:#1a1917;color:#fff;border:none;border-radius:8px;cursor:pointer">
+      잠금 해제
+    </button>
+    <button onclick="document.getElementById('lock-overlay').style.display='none'"
+      style="width:100%;padding:8px;font-size:12px;font-family:'Noto Sans KR',sans-serif;background:transparent;color:#a09f9a;border:none;cursor:pointer;margin-top:6px">
+      샘플로 계속 보기 →
+    </button>
+  </div>
+</div>
+<header>
+  <div>
+    <div class="title">병원 매출분석 대시보드</div>
+    <div class="sub">나은치과 · <span id="hdr-year">2026</span>년 &nbsp;<span id="sample-badge" style="font-size:10px;background:#faeeda;color:#854f0b;padding:1px 7px;border-radius:4px;font-weight:500">샘플</span></div>
+  </div>
+  <div class="year-sel">
+    <button class="yr-btn" onclick="switchYear('2024',this)">2024</button>
+    <button class="yr-btn" onclick="switchYear('2025',this)">2025</button>
+    <button class="yr-btn active" onclick="switchYear('2026',this)">2026</button>
+  </div>
+</header>
+
+<!-- 모바일/태블릿 탭바 -->
+<div class="mobile-tabs">
+  <button class="mob-tab active" id="mob-tab-left" onclick="switchMobTab('left')">📊 연간 데이터</button>
+  <button class="mob-tab" id="mob-tab-right" onclick="switchMobTab('right')">📅 월간 상세</button>
+</div>
+
+<div class="main" id="main-grid">
+  <div class="left" data-tab-panel="left">
+    <div class="metrics-grid" id="metrics-grid"></div>
+    <div class="chart-block">
+      <div class="chart-hdr">
+        <span class="chart-title">매출 추이</span>
+        <div class="chart-ctrl"><div class="cy-tabs" id="cyt-sales"></div></div>
+      </div>
+      <div class="chart-legend-row"><div class="legend" id="legend-sales"></div></div>
+      <div class="chart-wrap"><canvas id="chartSales"></canvas></div>
+    </div>
+    <div class="chart-block">
+      <div class="chart-hdr">
+        <span class="chart-title">수익 추이</span>
+        <div class="chart-ctrl"><div class="cy-tabs" id="cyt-profit"></div></div>
+      </div>
+      <div class="chart-legend-row"><div class="legend" id="legend-profit"></div></div>
+      <div class="chart-wrap"><canvas id="chartProfit"></canvas></div>
+    </div>
+  </div>
+  <div class="right" data-tab-panel="right">
+    <div class="panel-lbl">월별 상세</div>
+    <div class="month-grid" id="month-grid"></div>
+    <div class="divider"></div>
+    <div id="panel"></div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// 비밀번호 잠금
+// ─────────────────────────────────────────────────────────────────────────────
+const PW_HASH = 'ed23a362f84e28078430a98e6b191884ce72b3f1cbca16d9ef099d07a939cfb2';
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function tryUnlock() {
+  const pw = document.getElementById('pw-input').value;
+  const hash = await sha256(pw);
+  if(hash === PW_HASH) {
+    isUnlocked = true;
+    document.getElementById('lock-overlay').style.display='none';
+    document.getElementById('sample-badge').style.display='none';
+    // swap in real data
+    Object.assign(RAW, REAL_DATA);
+    ['2024','2025'].forEach(yr => deriveYr(yr));
+    c26 = RAW['2026'].labels.map((_,i)=>calc26(i));
+    refresh26();
+    buildMetrics(); buildMonthGrid(); buildCharts(); renderPanel();
+  } else {
+    document.getElementById('pw-error').style.display='block';
+    document.getElementById('pw-input').value='';
+    document.getElementById('pw-input').focus();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key==='Enter' && document.getElementById('lock-overlay').style.display!=='none') tryUnlock();
+});
+
+let isUnlocked = false;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 데이터
+// ─────────────────────────────────────────────────────────────────────────────
+const FORECAST_FROM = 2;
+const N = null;
+
+// ── 샘플 데이터 (비밀번호 전 표시용) ─────────────────────────────────────────
+// 2025 실제값의 약 절반 수준, 자연스러운 변동 적용
+const SAMPLE_DATA = {
+  '2024': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [N,N,N,N,N,N,N,N,N, 18500000,17800000,21200000],
+    수납액:      [N,N,N,N,N,N,N,N,N, 76000000,83400000,77000000],
+    검진:        [N,N,N,N,N,N,N,N,N, 11500000,13200000,15800000],
+    급여:        [N,N,N,N,N,N,N,N,N, 50400000,50400000,49600000],
+    급여병원부담:[N,N,N,N,N,N,N,N,N, 4490000, 4490000, 4490000],
+    퇴직금:      [N,N,N,N,N,N,N,N,N, 2740000, 2740000, 2740000],
+    매출총이익:  [N,N,N,N,N,N,N,N,N, 16200000,19700000,21200000],
+    NET:         [N,N,N,N,N,N,N,N,N, 5760000, 8480000, 7390000],
+    dataStart: 9,
+  },
+  '2025': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [20300000,14100000,13700000,18300000,19500000,19800000,17500000,19300000,18500000, 23500000,18900000,23900000],
+    수납액:      [39800000,44800000,56100000,84800000,80100000,63000000,75900000,69000000,74000000,  67000000,89800000,92400000],
+    검진:        [16400000, 8900000, 6600000, 8800000,10800000, 9800000,11400000,13500000,12500000,  11700000,13500000,14000000],
+    급여:        [33700000,35200000,42100000,42900000,48300000,48300000,48300000,48300000,50500000,  48100000,53000000,55200000],
+    급여병원부담: [3640000, 3790000, 3880000, 3880000, 4330000, 4330000, 4330000, 4330000, 4550000,  4480000, 4490000, 4710000],
+    퇴직금:      [2740000, 2740000, 3050000, 3050000, 3270000, 3270000, 3270000, 3270000, 3175000,  3175000, 3175000, 3290000],
+    매출총이익:  [15600000, 8790000, 5490000,27800000,20600000,10000000,15500000,14300000,13500000,  12800000,25600000,26500000],
+    NET:         [N,N,N, 6600000,6100000,800000, 4470000,3500000,4500000, 7070000,12730000,13060000],
+    dataStart: 0,
+  },
+  '2026': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [21000000,16300000,15000000,17500000,20000000,20000000,17500000,17500000,17500000,20000000,20000000,22500000],
+    수납액:      [63000000,57300000,75000000,75000000,75000000,75000000,75000000,75000000,75000000,75000000,85000000,85000000],
+    검진:        [10300000, 4400000, 6000000, 8500000,10000000,10000000,10000000,12500000,12500000,12500000,13500000,14000000],
+    급여:        [41200000,43200000,44000000,44000000,47500000,47500000,47500000,47500000,47500000,47500000,52500000,55000000],
+    급여병원부담_saved:[3840000,4000000,N,N,N,N,N,N,N,N,N,N],
+    퇴직금_saved:     [2840000,2840000,N,N,N,N,N,N,N,N,N,N],
+    병원수익_saved:   [N,N,N,N,N,N,N,N,N,N,N,N],
+    기공_saved:       [7710000,6740000,N,N,N,N,N,N,N,N,N,N],
+    재료_saved:       [3640000,3480000,N,N,N,N,N,N,N,N,N,N],
+    오스템덴티움:[1810000,1810000,1750000,1750000,1750000,1750000,1750000,1750000,1750000,1750000,1750000,1750000],
+    복리후생비:  [1330000,4130000,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000],
+    기타비용:    [4540000, 330000,1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000,1000000],
+    dataStart: 0,
+  }
+};
+
+// ── 실제 데이터 (비밀번호 해제 후) ───────────────────────────────────────────
+const REAL_DATA = {
+  '2024': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [N,N,N,N,N,N,N,N,N, 37000000,36485330,43576516],
+    수납액:      [N,N,N,N,N,N,N,N,N, 158000000,166767700,154090300],
+    검진:        [N,N,N,N,N,N,N,N,N, 23500000,26339003,31586215],
+    급여:        [N,N,N,N,N,N,N,N,N, 91016400+10409046, 91016400+10409046, 91016400+9531438],
+    급여병원부담:[N,N,N,N,N,N,N,N,N, 8984035, 8984035, 8984035],
+    퇴직금:      [N,N,N,N,N,N,N,N,N, 5477623, 5477623, 5477623],
+    매출총이익:  [N,N,N,N,N,N,N,N,N, 32402896,39476496,42371614],
+    NET:         [N,N,N,N,N,N,N,N,N, 11531810,16963956,14775909],
+    dataStart: 9,
+  },
+  '2025': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [40686310,28143090,27443280,36668050,39127030,39590450,35085120,38500000,37000000, 46996440,37705510,47881830],
+    수납액:      [79627200,89513000,112216500,169686400,160129860,126075000,151873600,138000000,148000000, 134041700,179575800,184882000],
+    검진:        [32801990,17835620,13234029,17619978,21514590,19695672,22808426,27000000,25000000, 23441801,27071610,28085653],
+    급여:        [
+      67330000+0, 70330000+0, 83847123+373000,
+      83847123+2000000, 94432975+2123465, 94432975+2000000,
+      94432975+2000000, 94432975+2000000, 96476943+4590000,
+      96169713, 105982790, 110430935
+    ],
+    급여병원부담:[7280762,7580762,7763905, 7763905,8664768,8664768, 8664768,8664768,9091812, 8963866,8972340,9419022],
+    퇴직금:      [5477623,5477623,6099890, 6099890,6535857,6535857, 6535857,6535857,6349041, 6349041,6349041,6578994],
+    매출총이익:  [31308809,17581151,10974283,55538156,41286962,20066673,30947526,28556400,26952204, 25576558,51278292,53004668],
+    NET:         [N,N,N, 13200000,12230000,1600000, 8930000,7000000,9000000, 14145129,25453648,26115586],
+    dataStart: 0,
+  },
+  '2026': {
+    labels: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
+    보험청구액:  [42031600,32567750,30000000,35000000,40000000,40000000,35000000,35000000,35000000,40000000,40000000,45000000],
+    수납액:      [126000000,114546100,150000000,150000000,150000000,150000000,150000000,150000000,150000000,150000000,170000000,170000000],
+    검진:        [20663240,8740500,12000000,17000000,20000000,20000000,20000000,25000000,25000000,25000000,27000000,28000000],
+    급여:        [82349183,86354493,88000000,88000000,95000000,95000000,95000000,95000000,95000000,95000000,105000000,110000000],
+    급여병원부담_saved:[7677621,8008153,N,N,N,N,N,N,N,N,N,N],
+    퇴직금_saved:      [5674340,5674339,N,N,N,N,N,N,N,N,N,N],
+    병원수익_saved:    [N,N,N,N,N,N,N,N,N,N,N,N],
+    기공_saved:        [15413320,13481000,N,N,N,N,N,N,N,N,N,N],
+    재료_saved:        [7271485,6964800,N,N,N,N,N,N,N,N,N,N],
+    오스템덴티움:[3626167,3626166,3500000,3500000,3500000,3500000,3500000,3500000,3500000,3500000,3500000,3500000],
+    복리후생비:  [2666290,8255270,4000000,4000000,4000000,4000000,4000000,4000000,4000000,4000000,4000000,4000000],
+    기타비용:    [9074500,656500,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000,2000000],
+    dataStart: 0,
+  }
+};
+
+// 시작은 샘플 데이터로
+let RAW = JSON.parse(JSON.stringify(SAMPLE_DATA));
+
+function deriveYr(yr) {
+  const d = RAW[yr];
+  d.진료매출 = d.보험청구액.map((v,i) => v!=null&&d.수납액[i]!=null ? v+d.수납액[i] : null);
+  d.총매출   = d.진료매출.map((v,i) => v!=null&&d.검진[i]!=null ? v+d.검진[i] : null);
+  d.인건비   = d.급여.map((v,i) => {
+    const a=v||0, b=d.급여병원부담[i]||0, c=d.퇴직금[i]||0;
+    return (v!=null||d.급여병원부담[i]!=null||d.퇴직금[i]!=null) ? a+b+c : null;
+  });
+  d.총비용 = d.총매출.map((v,i) => v!=null&&d.매출총이익[i]!=null ? v-d.매출총이익[i] : null);
+}
+['2024','2025'].forEach(yr => deriveYr(yr));
+
+// 2026 calc
+function calc26(i) {
+  const d = RAW['2026'], m = {};
+  m.급여 = d.급여[i];
+  m.급여병원부담 = d.급여병원부담_saved[i]!==null ? d.급여병원부담_saved[i] : Math.round(m.급여*0.095);
+  m.퇴직금 = d.퇴직금_saved[i]!==null ? d.퇴직금_saved[i] : Math.round(m.급여*0.07);
+  m.수납액 = d.수납액[i];
+  m.병원수익 = d.병원수익_saved[i]!==null ? d.병원수익_saved[i] : Math.round(33700000+(m.수납액-200000000)*0.2);
+  m.기공 = d.기공_saved[i]!==null ? d.기공_saved[i] : Math.round(m.수납액*0.1+3000000);
+  m.재료 = d.재료_saved[i]!==null ? d.재료_saved[i] : Math.round(m.수납액*0.03+3000000);
+  m.오스템덴티움 = d.오스템덴티움[i];
+  m.복리후생비 = d.복리후생비[i];
+  m.기타비용 = d.기타비용[i];
+  m.보험청구액 = d.보험청구액[i];
+  m.검진 = d.검진[i];
+  m.진료매출 = m.보험청구액+m.수납액;
+  m.총매출 = m.진료매출+m.검진;
+  m.인건비 = m.급여+m.급여병원부담+m.퇴직금;
+  m.총비용 = m.인건비+m.병원수익+m.기공+m.재료+m.오스템덴티움+m.복리후생비+m.기타비용;
+  const C3=(m.총매출-110000000)*0.03;
+  m.매출총이익 = m.총매출-m.총비용-C3;
+  m.C3=C3;
+  m.KMR = C3+((m.매출총이익-C3)*0.75+6000000)*0.2;
+  m.NET = ((m.매출총이익-C3)*0.75+6000000)*0.8;
+  return m;
+}
+
+let c26 = RAW['2026'].labels.map((_,i)=>calc26(i));
+
+function refresh26() {
+  const d = RAW['2026'];
+  d.진료매출   = c26.map(m=>m.진료매출);
+  d.총매출     = c26.map(m=>m.총매출);
+  d.인건비     = c26.map(m=>m.인건비);
+  d.총비용     = c26.map(m=>m.총비용);
+  d.매출총이익 = c26.map(m=>m.매출총이익);
+  d.NET        = c26.map(m=>m.NET);
+  d.KMR        = c26.map(m=>m.KMR);
+  d.급여병원부담 = c26.map(m=>m.급여병원부담);
+  d.퇴직금     = c26.map(m=>m.퇴직금);
+}
+refresh26();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 상태
+// ─────────────────────────────────────────────────────────────────────────────
+let curYear='2026', selMonth=0, cySales='2026', cyProfit='2026';
+let chartS=null, chartP=null;
+// panel mode per [year][month]: 'summary' | 'detail' | 'edit'
+const panelMode = { '2024':{}, '2025':{}, '2026':{} };
+function getMode(yr,i) { return panelMode[yr][i] || 'summary'; }
+function setMode(yr,i,mode) { panelMode[yr][i]=mode; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 포맷
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtAmt(n) {
+  if(n==null) return '-';
+  const s=n<0?'-':''; const a=Math.abs(n);
+  if(a>=100000000) return s+(a/100000000).toFixed(1).replace(/\.0$/,'')+'억';
+  return s+Math.round(a/10000).toLocaleString('ko-KR')+'만';
+}
+function fmtMetric(n) {
+  if(n==null) return {num:'-',suffix:'',unit:''};
+  const s=n<0?'-':''; const a=Math.abs(n);
+  if(a>=100000000) return {num:s+(a/100000000).toFixed(1).replace(/\.0$/,''),suffix:'억',unit:'원'};
+  return {num:s+Math.round(a/10000).toLocaleString('ko-KR'),suffix:'만',unit:'원'};
+}
+function yoyTag(cur, prev) {
+  if(prev==null||cur==null) return '';
+  const pct=(cur-prev)/Math.abs(prev)*100;
+  const c=pct>=0?'up':'down';
+  return `<span class="yoy-tag ${c}">${pct>=0?'▲':'▼'}${pct>=0?'+':''}${pct.toFixed(1)}%</span>`;
+}
+function prevData(yr, key, i) {
+  const py = {'2025':'2024','2026':'2025'}[yr];
+  if(!py) return null;
+  return RAW[py][key]?.[i] ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 연간 메트릭
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMetrics() {
+  const d = RAW[curYear];
+  const sum = k => d[k] ? d[k].reduce((s,v)=>s+(v||0),0) : null;
+  const items=[['연간 진료매출','진료매출'],['연간 검진매출','검진'],['연간 총매출','총매출'],['연간 NET','NET']];
+  document.getElementById('metrics-grid').innerHTML = items.map(([lbl,k])=>{
+    const {num,suffix,unit} = fmtMetric(sum(k));
+    return `<div class="metric">
+      <div class="metric-label">${lbl}</div>
+      <div class="metric-val"><span class="metric-num">${num}<span style="font-size:13px">${suffix}</span></span><span class="metric-unit">${unit}</span></div>
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 차트
+// ─────────────────────────────────────────────────────────────────────────────
+const salesColors=[['진료매출','#2d5a8e'],['검진매출','#1d7a5a'],['총매출','#5a2a8a']];
+const salesKeys  =['진료매출','검진','총매출'];
+const profitColors=[['매출총이익','#8a3a1a'],['NET','#7a6a1a']];
+const profitKeys  =['매출총이익','NET'];
+
+function chartOpts(allowNeg=false){
+  return{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+      if(ctx.parsed.y==null)return null;
+      return ` ${ctx.dataset.label}: ${fmtAmt(ctx.parsed.y*10000)}`;
+    }}}},
+    scales:{
+      x:{ticks:{font:{size:11},autoSkip:false,color:'#a09f9a'},grid:{color:'rgba(0,0,0,0.04)'},border:{display:false}},
+      y:{
+        ...(allowNeg ? {} : {}),
+        beginAtZero: false,
+        ticks:{font:{size:10},callback:v=>fmtAmt(v*10000),color:'#a09f9a'},
+        grid:{color:'rgba(0,0,0,0.04)'},
+        border:{display:false}
+      }
+    }
+  };
+}
+
+function make26ds(colorList, keyList, d) {
+  return colorList.flatMap(([k,c],i)=>{
+    const arr=(d[keyList[i]]||[]).map(v=>v!=null?Math.round(v/10000):null);
+    const conf=arr.map((v,j)=>j<FORECAST_FROM?v:(j===FORECAST_FROM?v:null));
+    const fore=arr.map((v,j)=>j<FORECAST_FROM-1?null:v);
+    return [
+      {label:k,data:conf,borderColor:c,backgroundColor:c+'18',tension:0.35,pointRadius:3,borderWidth:2,fill:false,spanGaps:false},
+      {label:k+'(예측)',data:fore,borderColor:c+'66',backgroundColor:'transparent',tension:0.35,pointRadius:2,borderWidth:1.5,fill:false,borderDash:[4,3],spanGaps:false}
+    ];
+  });
+}
+
+function buildCharts(){
+  ['sales','profit'].forEach(t=>{
+    const active=t==='sales'?cySales:cyProfit;
+    document.getElementById(`cyt-${t}`).innerHTML=
+      ['2024','2025','2026'].map(y=>`<button class="cy-btn${y===active?' active':''}" onclick="swCy('${t}','${y}',this)">${y}</button>`).join('');
+  });
+
+  // sales
+  const sd=RAW[cySales];
+  document.getElementById('legend-sales').innerHTML=salesColors.map(([k,c])=>
+    `<div class="legend-item"><span class="legend-dot" style="background:${c}"></span>${k}</div>`).join('');
+
+  const mkSolid=(colorList,keyList,d)=>colorList.map(([k,c],i)=>({
+    label:k,data:(d[keyList[i]]||[]).map(v=>v!=null?Math.round(v/10000):null),
+    borderColor:c,backgroundColor:c+'18',tension:0.35,pointRadius:3,borderWidth:2,fill:false,spanGaps:false
+  }));
+  const mk24=(colorList,keyList,d)=>colorList.flatMap(([k,c],i)=>{
+    const dotted=Array(12).fill(null);
+    for(let j=9;j<12;j++){const v=d[keyList[i]]?.[j];dotted[j]=v!=null?Math.round(v/10000):null;}
+    return [{label:k,data:dotted,borderColor:c,backgroundColor:c+'18',tension:0.35,pointRadius:4,borderWidth:2,fill:false,borderDash:[5,4],spanGaps:false}];
+  });
+
+  let sDs = cySales==='2024'?mk24(salesColors,salesKeys,sd):cySales==='2026'?make26ds(salesColors,salesKeys,sd):mkSolid(salesColors,salesKeys,sd);
+  if(chartS) chartS.destroy();
+  chartS=new Chart(document.getElementById('chartSales'),{type:'line',data:{labels:sd.labels,datasets:sDs},options:chartOpts()});
+
+  // profit
+  const pd=RAW[cyProfit];
+  document.getElementById('legend-profit').innerHTML=profitColors.map(([k,c])=>
+    `<div class="legend-item"><span class="legend-dot" style="background:${c}"></span>${k}</div>`).join('');
+  let pDs=cyProfit==='2024'?mk24(profitColors,profitKeys,pd):cyProfit==='2026'?make26ds(profitColors,profitKeys,pd):mkSolid(profitColors,profitKeys,pd);
+  if(chartP) chartP.destroy();
+  chartP=new Chart(document.getElementById('chartProfit'),{type:'line',data:{labels:pd.labels,datasets:pDs},options:chartOpts(true)});
+}
+function swCy(t,yr,el){
+  if(t==='sales')cySales=yr;else cyProfit=yr;
+  document.querySelectorAll(`#cyt-${t} .cy-btn`).forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); buildCharts();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 월 탭
+// ─────────────────────────────────────────────────────────────────────────────
+function buildMonthGrid(){
+  const d=RAW[curYear];
+  document.getElementById('month-grid').innerHTML=d.labels.map((m,i)=>{
+    const noData=curYear==='2024'&&i<9;
+    const isFore=curYear==='2026'&&i>=FORECAST_FROM;
+    let cls='m-btn';
+    if(i===selMonth)cls+=' active';
+    if(noData)cls+=' no-data';
+    else if(isFore)cls+=' forecast';
+    return `<button class="${cls}" onclick="${noData?'':'selMon('+i+',this)'}">${m}</button>`;
+  }).join('');
+}
+
+function selMon(i,el){
+  document.querySelectorAll('.m-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active'); selMonth=i; renderPanel();
+  // on mobile: switch to detail tab automatically
+  if(window.innerWidth <= 900) switchMobTab('right');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 패널 렌더
+// ─────────────────────────────────────────────────────────────────────────────
+function renderPanel(){
+  const yr=curYear, i=selMonth, d=RAW[yr];
+  const noData=yr==='2024'&&i<9;
+  const mode=getMode(yr,i);
+
+  if(noData){
+    document.getElementById('panel').innerHTML=`<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">데이터 없음</div>`;
+    return;
+  }
+
+  // data accessor
+  function get(key){ return yr==='2026'?c26[i][key]:d[key]?.[i]??null; }
+
+  const isFore=yr==='2026'&&i>=FORECAST_FROM;
+  const isConf=yr==='2026'&&i<FORECAST_FROM;
+
+  let html='';
+
+  // ── Mode badge + action buttons ────────────────────────────────────────────
+  const lbl=d.labels[i];
+  let statusBadge='';
+  if(yr==='2026'){
+    statusBadge=isConf
+      ?`<span class="sbadge actual">✅ 확정</span>`
+      :`<span class="sbadge forecast">📊 예측</span>`;
+  }
+
+  html+=`<div class="summary-hdr"><span class="summary-title">${lbl}</span><div class="summary-badges">${statusBadge}</div></div>`;
+
+  // Action buttons
+  const editLabel = mode==='edit' ? '저장' : '데이터 수정';
+  const editCls   = mode==='edit' ? 'act-btn warn' : 'act-btn primary';
+  const editFn    = mode==='edit' ? `saveEdit(${i})` : `startEdit(${i})`;
+
+  if(mode==='edit'){
+    html+=`<div class="action-row">
+      <button class="act-btn" onclick="showMode('summary',${i})">← 요약</button>
+      <button class="act-btn" onclick="showMode('detail',${i})">상세보기</button>
+      <button class="${editCls}" onclick="${editFn}">${editLabel}</button>
+    </div>`;
+  } else if(mode==='detail'){
+    html+=`<div class="action-row">
+      <button class="act-btn" onclick="showMode('summary',${i})">← 요약</button>
+      <button class="act-btn primary" onclick="startEdit(${i})">데이터 수정</button>
+    </div>`;
+  } else {
+    html+=`<div class="action-row">
+      <button class="act-btn" onclick="showMode('detail',${i})">상세보기</button>
+      <button class="act-btn primary" onclick="startEdit(${i})">${editLabel}</button>
+    </div>`;
+  }
+
+  // ── Data helpers ─────────────────────────────────────────────────────────
+  const 진료 = yr==='2026'?c26[i].진료매출:(d.진료매출?.[i]??null);
+  const 총매 = yr==='2026'?c26[i].총매출:(d.총매출?.[i]??null);
+  const 인건 = yr==='2026'?c26[i].인건비:(d.인건비?.[i]??null);
+  const 급여v = get('급여');
+  const 급병v = yr==='2026'?c26[i].급여병원부담:(d.급여병원부담?.[i]??null);
+  const 퇴직v = yr==='2026'?c26[i].퇴직금:(d.퇴직금?.[i]??null);
+  const 총비 = yr==='2026'?c26[i].총비용:(d.총비용?.[i]??null);
+  const 이익 = yr==='2026'?c26[i].매출총이익:(d.매출총이익?.[i]??null);
+  const netv  = yr==='2026'?c26[i].NET:(d.NET?.[i]??null);
+  const prevYr={'2025':'2024','2026':'2025'}[yr];
+  const pd=prevYr?RAW[prevYr]:null;
+
+  // ── Summary (key items) ───────────────────────────────────────────────────
+  if(mode==='summary'){
+    const 기타비 = 총비!=null&&인건!=null ? 총비-인건 : null;
+    html+=`<div class="res-block">
+      ${rr('총매출',총매,true)}
+      ${rr('진료매출',진료,false,false,true)}
+      ${rr('검진매출',get('검진'),false,false,true)}
+      ${rr('총비용',총비,true)}
+      ${rr('인건비',인건,false,false,true)}
+      ${rr('기타비용',기타비,false,false,true)}
+      ${rr('매출총이익',이익,true,이익!=null&&이익<0)}
+      ${rr('NET',netv,true)}
+    </div>`;
+
+    // YoY
+    if(pd){
+      const yoyKeys=[
+        {k:'총매출',l:'총매출',cur:총매},
+        {k:'인건비',l:'인건비',cur:인건},
+        {k:'매출총이익',l:'매출\n총이익',cur:이익},
+        {k:'NET',l:'NET',cur:netv},
+      ];
+      const prevLabel=`${prevYr}년 ${d.labels[i]}`;
+      const yoyRows=yoyKeys.map(({k,l,cur})=>{
+        const prev=pd[k]?.[i]??null;
+        if(cur==null&&prev==null) return '';
+        const labelHtml=l.includes('\n')
+          ?l.split('\n').map(t=>`<span style="display:block;line-height:1.3">${t}</span>`).join('')
+          :l;
+        return `<div class="yoy-row"><span class="yoy-lbl">${labelHtml}</span>
+          <div class="yoy-vals">
+            <span class="yoy-prev">${fmtAmt(prev)}</span>
+            <span style="color:var(--text3)">→</span>
+            <span class="yoy-cur">${fmtAmt(cur)}</span>
+            ${yoyTag(cur,prev)}
+          </div></div>`;
+      }).join('');
+      if(yoyRows.trim()){
+        html+=`<div class="yoy-block"><div class="yoy-title">전년 동기 대비 (${prevLabel})</div>${yoyRows}</div>`;
+      }
+    }
+  }
+
+  // ── Detail (everything) ───────────────────────────────────────────────────
+  if(mode==='detail'){
+    html+=`<div class="res-block">
+      <div class="res-block-title">매출</div>
+      ${rr('보험(청구액)',get('보험청구액'))}
+      ${rr('수납액',get('수납액'))}
+      ${rr('진료매출',진료,true)}
+      ${rr('검진매출',get('검진'))}
+      ${rr('총매출',총매,true)}
+    </div>`;
+
+    html+=`<div class="res-block">
+      <div class="res-block-title">인건비</div>
+      <div class="res-row"><span class="res-label indent">급여(기본+성과)</span><span class="res-val">${fmtAmt(급여v)}</span></div>
+      <div class="res-row"><span class="res-label indent">급여병원부담(4대보험)</span><span class="res-val">${fmtAmt(급병v)}</span></div>
+      <div class="res-row"><span class="res-label indent">퇴직금</span><span class="res-val">${fmtAmt(퇴직v)}</span></div>
+      ${rr('인건비 합계',인건,true)}
+    </div>`;
+
+    if(yr==='2026'){
+      html+=`<div class="res-block">
+        <div class="res-block-title">기타비용</div>
+        ${rr('변동임대료+관리비',c26[i].병원수익)}
+        ${rr('기공',c26[i].기공)}
+        ${rr('재료',c26[i].재료)}
+        ${rr('오스템덴티움',c26[i].오스템덴티움)}
+        ${rr('복리후생비',c26[i].복리후생비)}
+        ${rr('기타비용',c26[i].기타비용)}
+      </div>`;
+    }
+
+    html+=`<div class="res-block">
+      <div class="res-block-title">수익</div>
+      ${rr('총비용',총비)}
+      ${rr('매출총이익',이익,true,이익!=null&&이익<0)}
+      ${rr('NET',netv,true)}`;
+    if(yr==='2026') html+=rr('KMR',c26[i].KMR);
+    html+=`</div>`;
+
+    // YoY in detail too
+    if(pd){
+      const yoyKeys=[
+        {k:'총매출',l:'총매출',cur:총매},
+        {k:'인건비',l:'인건비',cur:인건},
+        {k:'매출총이익',l:'매출\n총이익',cur:이익},
+        {k:'NET',l:'NET',cur:netv},
+      ];
+      const prevLabel=`${prevYr}년 ${d.labels[i]}`;
+      const yoyRows=yoyKeys.map(({k,l,cur})=>{
+        const prev=pd[k]?.[i]??null;
+        if(cur==null&&prev==null) return '';
+        const labelHtml=l.includes('\n')
+          ?l.split('\n').map(t=>`<span style="display:block;line-height:1.3">${t}</span>`).join('')
+          :l;
+        return `<div class="yoy-row"><span class="yoy-lbl">${labelHtml}</span>
+          <div class="yoy-vals">
+            <span class="yoy-prev">${fmtAmt(prev)}</span>
+            <span style="color:var(--text3)">→</span>
+            <span class="yoy-cur">${fmtAmt(cur)}</span>
+            ${yoyTag(cur,prev)}
+          </div></div>`;
+      }).join('');
+      if(yoyRows.trim()){
+        html+=`<div class="yoy-block"><div class="yoy-title">전년 동기 대비 (${prevLabel})</div>${yoyRows}</div>`;
+      }
+    }
+  }
+
+  // ── Edit form ─────────────────────────────────────────────────────────────
+  if(mode==='edit'){
+    html+=`<div class="edit-form">`;
+
+    if(yr==='2026'){
+      const autoF={
+        급여병원부담:()=>RAW['2026'].급여병원부담_saved[i]===null,
+        퇴직금:()=>RAW['2026'].퇴직금_saved[i]===null,
+        기공:()=>RAW['2026'].기공_saved[i]===null,
+        재료:()=>RAW['2026'].재료_saved[i]===null,
+      };
+      const ef=(key,label,raw)=>{
+        const isA=autoF[key]&&autoF[key]();
+        const val=Math.round(c26[i][key]||0);
+        if(isA) return `<div class="field-row"><span class="field-lbl">${label}</span>
+          <input class="field-in auto" type="text" readonly value="${val.toLocaleString('ko-KR')}"/></div>`;
+        return `<div class="field-row"><span class="field-lbl">${label}</span>
+          <input class="field-in" type="number" value="${val}" data-raw="${raw}" data-idx="${i}" onchange="updVal(this)"/></div>`;
+      };
+      html+=`<div class="fg-title">매출</div>
+        ${ef('보험청구액','보험(청구액)','보험청구액')}
+        ${ef('수납액','수납액','수납액')}
+        ${ef('검진','검진','검진')}
+        <div class="fg-title">인건비</div>
+        ${ef('급여','급여(기본+성과)','급여')}
+        ${ef('급여병원부담','급여병원부담','급여병원부담_saved')}
+        ${ef('퇴직금','퇴직금','퇴직금_saved')}
+        <div class="fg-title">기타비용</div>
+        ${ef('병원수익','변동임대료+관리비','병원수익_saved')}
+        ${ef('기공','기공','기공_saved')}
+        ${ef('재료','재료','재료_saved')}
+        ${ef('오스템덴티움','오스템덴티움','오스템덴티움')}
+        ${ef('복리후생비','복리후생비','복리후생비')}
+        ${ef('기타비용','기타비용','기타비용')}`;
+    } else {
+      // 2024/2025: editable fields
+      const editableFields2425=[
+        {key:'보험청구액',l:'보험(청구액)',arr:'보험청구액'},
+        {key:'수납액',l:'수납액',arr:'수납액'},
+        {key:'검진',l:'검진',arr:'검진'},
+        {key:'급여',l:'급여(기본+성과)',arr:'급여'},
+        {key:'급여병원부담',l:'급여병원부담',arr:'급여병원부담'},
+        {key:'퇴직금',l:'퇴직금',arr:'퇴직금'},
+        {key:'매출총이익',l:'매출총이익',arr:'매출총이익'},
+        {key:'NET',l:'NET',arr:'NET'},
+      ];
+      const groups2425=[
+        {t:'매출',ks:['보험청구액','수납액','검진']},
+        {t:'인건비',ks:['급여','급여병원부담','퇴직금']},
+        {t:'수익',ks:['매출총이익','NET']},
+      ];
+      for(const g of groups2425){
+        html+=`<div class="fg-title">${g.t}</div>`;
+        for(const k of g.ks){
+          const f=editableFields2425.find(x=>x.key===k);
+          const val=d[f.arr]?.[i]??0;
+          html+=`<div class="field-row"><span class="field-lbl">${f.l}</span>
+            <input class="field-in" type="number" value="${Math.round(val)}" data-yr="${yr}" data-arr="${f.arr}" data-idx="${i}" onchange="updVal2425(this)"/></div>`;
+        }
+      }
+    }
+    html+=`</div>`;
+  }
+
+  document.getElementById('panel').innerHTML=html;
+}
+
+function rr(label,val,bold=false,neg=false,dim=false){
+  const cls=neg?'neg':'';
+  const fw=bold?'font-weight:500':'';
+  const color=dim?'color:var(--text3)':'';
+  const indent=dim?'padding-left:10px;font-size:11px':'';
+  return `<div class="res-row">
+    <span class="res-label" style="${fw};${color};${indent}">${label}</span>
+    <span class="res-val ${cls}" style="${fw};${color};${indent};font-family:'DM Mono',monospace">${fmtAmt(val)}</span>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 모드 전환
+// ─────────────────────────────────────────────────────────────────────────────
+function showMode(mode,i){ setMode(curYear,i,mode); renderPanel(); }
+function startEdit(i){ setMode(curYear,i,'edit'); renderPanel(); }
+function saveEdit(i){ setMode(curYear,i,'summary'); renderPanel(); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 값 업데이트
+// ─────────────────────────────────────────────────────────────────────────────
+function updVal(el){
+  const i=parseInt(el.dataset.idx), raw=el.dataset.raw;
+  if(!raw) return;
+  RAW['2026'][raw][i]=parseFloat(el.value)||0;
+  c26[i]=calc26(i); refresh26();
+  // re-render results without losing edit mode
+  renderPanel();
+  buildMetrics();
+  if(cySales==='2026'||cyProfit==='2026') buildCharts();
+}
+
+function updVal2425(el){
+  const i=parseInt(el.dataset.idx), yr=el.dataset.yr, arr=el.dataset.arr;
+  if(RAW[yr][arr]) RAW[yr][arr][i]=parseFloat(el.value)||0;
+  // re-derive totals
+  const d=RAW[yr];
+  d.진료매출[i]=d.보험청구액[i]!=null&&d.수납액[i]!=null?d.보험청구액[i]+d.수납액[i]:null;
+  d.총매출[i]=d.진료매출[i]!=null&&d.검진[i]!=null?d.진료매출[i]+d.검진[i]:null;
+  d.인건비[i]=(d.급여[i]||0)+(d.급여병원부담[i]||0)+(d.퇴직금[i]||0);
+  d.총비용[i]=d.총매출[i]!=null&&d.매출총이익[i]!=null?d.총매출[i]-d.매출총이익[i]:null;
+  renderPanel(); buildMetrics();
+  if(cySales===yr||cyProfit===yr) buildCharts();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 연도 전환
+// ─────────────────────────────────────────────────────────────────────────────
+function switchYear(yr,el){
+  curYear=yr; selMonth=yr==='2024'?9:0;
+  document.querySelectorAll('.yr-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('hdr-year').textContent=yr;
+  buildMetrics(); buildMonthGrid(); renderPanel();
+  cySales=yr; cyProfit=yr; buildCharts();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 모바일 탭 전환
+// ─────────────────────────────────────────────────────────────────────────────
+function switchMobTab(side) {
+  const main = document.getElementById('main-grid');
+  const leftBtn = document.getElementById('mob-tab-left');
+  const rightBtn = document.getElementById('mob-tab-right');
+  if(side === 'right') {
+    main.classList.add('tab-right');
+    leftBtn.classList.remove('active');
+    rightBtn.classList.add('active');
+  } else {
+    main.classList.remove('tab-right');
+    leftBtn.classList.add('active');
+    rightBtn.classList.remove('active');
+    // charts may need resize after becoming visible
+    setTimeout(() => { if(chartS) chartS.resize(); if(chartP) chartP.resize(); }, 50);
+  }
+}
+buildMetrics(); buildMonthGrid(); buildCharts(); renderPanel();
+</script>
+</body>
+</html>
