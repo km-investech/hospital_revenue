@@ -24,9 +24,10 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .yr-btn:hover{background:var(--surface2)}
 .yr-btn.active{background:var(--text);color:#fff;border-color:var(--text);font-weight:500}
 
-.main{display:grid;grid-template-columns:1fr 360px;min-height:calc(100vh - 55px)}
-.left{padding:18px 22px;overflow-y:auto}
-.right{background:var(--surface);border-left:1px solid var(--border);padding:18px;overflow-y:auto}
+.main{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 55px);max-width:1400px;margin:0 auto;width:100%;box-shadow:0 0 0 1px var(--border)}
+.main-wrap{background:var(--bg);min-height:calc(100vh - 55px)}
+.left{padding:24px 28px;overflow-y:auto}
+.right{background:var(--surface);border-left:1px solid var(--border);padding:24px 28px;overflow-y:auto}
 
 /* 2x2 metric cards */
 .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
@@ -49,10 +50,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
     border-bottom:2px solid transparent;transition:all 0.14s;
   }
   .mob-tab.active{color:var(--text);border-bottom-color:var(--text)}
-  /* hide left/right independently via data-tab */
-  .main{grid-template-columns:1fr;grid-template-rows:auto}
-  .left{border-bottom:none}
-  .right{border-left:none;border-top:1px solid var(--border)}
+  .main{grid-template-columns:1fr;grid-template-rows:auto;max-width:100%;box-shadow:none}
+  .left{border-bottom:none;padding:16px 18px}
+  .right{border-left:none;border-top:1px solid var(--border);padding:16px 18px}
   [data-tab-panel="right"]{display:none}
   [data-tab-panel="left"]{display:block}
   .main.tab-right [data-tab-panel="right"]{display:block}
@@ -191,6 +191,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
   <button class="mob-tab" id="mob-tab-right" onclick="switchMobTab('right')">📅 월간 상세</button>
 </div>
 
+<div class="main-wrap">
 <div class="main" id="main-grid">
   <div class="left" data-tab-panel="left">
     <div class="metrics-grid" id="metrics-grid"></div>
@@ -217,6 +218,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
     <div class="divider"></div>
     <div id="panel"></div>
   </div>
+</div>
 </div>
 
 <script>
